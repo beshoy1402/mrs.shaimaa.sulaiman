@@ -1,5 +1,6 @@
-import { useMemo, useState, type FormEvent } from 'react';
-import { Activity, ArrowDownRight, ArrowRight, ArrowUpRight, Bell, BookOpen, Brain, CalendarDays, Check, ChevronDown, ChevronLeft, ChevronRight, CircleHelp, ClipboardCheck, Clock3, Code2, Download, FileQuestion, GraduationCap, LayoutDashboard, LifeBuoy, LockKeyhole, LogOut, Menu, MessageCircle, Plus, Search, Settings, ShieldCheck, Sparkles, Target, TrendingUp, Users, X, Zap } from 'lucide-react';
+import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { Activity, ArrowDownRight, ArrowRight, ArrowUpRight, Bell, BookOpen, Brain, CalendarDays, Check, ChevronDown, ChevronLeft, ChevronRight, CircleHelp, ClipboardCheck, Clock3, Code2, Download, Eye, EyeOff, FileQuestion, GraduationCap, LayoutDashboard, LifeBuoy, LockKeyhole, LogOut, Menu, MessageCircle, Plus, Search, Settings, ShieldCheck, Sparkles, Target, TrendingUp, Users, X, Zap } from 'lucide-react';
+import { supabase } from './lib/supabase';
 
 type Role = 'Student' | 'Parent' | 'Assistant' | 'Teacher' | 'Admin' | 'Developer';
 type Student = { id:number; name:string; email:string; group:string; score:number; status:string };
@@ -28,6 +29,14 @@ const roleIcon = (role:Role) => role==='Student'?GraduationCap:role==='Parent'?U
 export default function App() {
  const [role,setRole]=useState<Role>('Student');
  const [signedIn,setSignedIn]=useState(false);
+ const [profile,setProfile]=useState<{id:string;display_name:string;role:string;is_active:boolean;preferred_language:string}|null>(null);
+ const [authLoading,setAuthLoading]=useState(true);
+ const [loginLoading,setLoginLoading]=useState(false);
+ const [loginEmail,setLoginEmail]=useState('');
+ const [loginPassword,setLoginPassword]=useState('');
+ const [showPassword,setShowPassword]=useState(false);
+ const [authError,setAuthError]=useState('');
+ const [resetMessage,setResetMessage]=useState('');
  const [active,setActive]=useState('Overview');
  const [sidebar,setSidebar]=useState(true);
  const [search,setSearch]=useState('');
@@ -40,40 +49,98 @@ export default function App() {
  const [answer,setAnswer]=useState<number|null>(null);
  const [showExplanation,setShowExplanation]=useState(false);
  const [notice,setNotice]=useState('');
- const [language,setLanguage]=useState<'EN'|'AR'>('EN');
  const filtered=useMemo(()=>students.filter(s=>(s.name+' '+s.email+' '+s.group).toLowerCase().includes(search.toLowerCase())),[students,search]);
  const flash=(message:string)=>{setNotice(message);window.setTimeout(()=>setNotice(''),3200)};
- const enter=(e:FormEvent)=>{e.preventDefault();setSignedIn(true);setActive('Overview')};
- const addStudent=(e:FormEvent)=>{e.preventDefault();setStudents(old=>[...old,{id:Date.now(),name:newName,email:newEmail,group:newGroup,score:0,status:'New'}]);setModal(false);setNewName('');setNewEmail('');flash('Student added to this demo workspace.')};
+ const roleMap:Record<string,Role>={student:'Student',parent:'Parent',assistant:'Assistant',teacher:'Teacher',admin:'Admin',developer:'Developer'};
+ const loadAccount=async(userId:string)=>{
+  const {data,error}=await supabase.from('profiles').select('id,display_name,role,is_active,preferred_language').eq('id',userId).maybeSingle();
+  if(error) throw error;
+  if(!data) throw new Error('Your account has not been assigned an academy role. Please contact the academy administrator.');
+  if(!data.is_active) throw new Error('This academy account is currently inactive. Please contact the academy administrator.');
+  const assignedRole=roleMap[String(data.role)];
+  if(!assignedRole) throw new Error('This account role is not enabled for this portal. Please contact the academy administrator.');
+  setProfile(data);
+  setRole(assignedRole);
+  setSignedIn(true);
+  setActive('Overview');
+ };
+ useEffect(()=>{
+  let alive=true;
+  const restore=async()=>{
+   try{
+    const {data,error}=await supabase.auth.getSession();
+    if(error) throw error;
+    if(data.session?.user) await loadAccount(data.session.user.id);
+   }catch(error){
+    if(alive){setProfile(null);setSignedIn(false);setAuthError(error instanceof Error?error.message:'Unable to restore your session. Please sign in again.');}
+    await supabase.auth.signOut();
+   }finally{if(alive)setAuthLoading(false);}
+  };
+  void restore();
+  const {data:{subscription}}=supabase.auth.onAuthStateChange((event)=>{
+   if(event==='SIGNED_OUT'&&alive){setProfile(null);setSignedIn(false);setRole('Student');}
+  });
+  return ()=>{alive=false;subscription.unsubscribe();};
+ },[]);
+ const handleLogin=async(e:FormEvent)=>{
+  e.preventDefault();setAuthError('');setResetMessage('');setLoginLoading(true);
+  try{
+   const {data,error}=await supabase.auth.signInWithPassword({email:loginEmail.trim(),password:loginPassword});
+   if(error) throw error;
+   if(!data.user) throw new Error('Authentication did not return a user account.');
+   await loadAccount(data.user.id);
+  }catch(error){
+   await supabase.auth.signOut();
+   setAuthError(error instanceof Error?error.message:'Sign-in failed. Please try again.');
+  }finally{setLoginLoading(false);}
+ };
+ const handleForgotPassword=async()=>{
+  setAuthError('');setResetMessage('');
+  if(!loginEmail.trim()){setAuthError('Enter your email address first, then select Forgot password.');return;}
+  setLoginLoading(true);
+  const {error}=await supabase.auth.resetPasswordForEmail(loginEmail.trim(),{redirectTo:window.location.origin});
+  setLoginLoading(false);
+  if(error)setAuthError(error.message);else setResetMessage('If an account exists for this email, a password reset link has been sent.');
+ };
+ const addStudent=(e:FormEvent)=>{e.preventDefault();setStudents(old=>[...old,{id:Date.now(),name:newName,email:newEmail,group:newGroup,score:0,status:'New'}]);setModal(false);setNewName('');setNewEmail('');flash('Student added to this local preview. Student creation is not yet connected to the database.')};
  const RoleIcon=roleIcon(role);
- const logout=()=>{setSignedIn(false);setActive('Overview')};
+ const logout=async()=>{await supabase.auth.signOut();setSignedIn(false);setProfile(null);setActive('Overview')};
 
- if(!signedIn) return <div className="public-site">
-  <div className="announcement"><Sparkles size={14}/> A more personal way to prepare for the SAT <span>Learn with confidence <ArrowUpRight size={13}/></span></div>
-  <header className="public-nav"><a className="brand" href="#"><span className="brand-mark">S<span>.</span></span><span><b>MRS. SHAIMAA SULAIMAN</b><small>SAT ENGLISH ACADEMY</small></span></a><nav><a href="#approach">Our approach</a><a href="#programs">SAT skills</a><a href="#faq">FAQs</a></nav><div className="nav-tools"><button className="language-btn" onClick={()=>setLanguage(language==='EN'?'AR':'EN')}>{language==='EN'?'العربية':'English'}</button><button className="button button-dark" onClick={()=>setSignedIn(true)}>Sign in <ArrowUpRight size={16}/></button></div></header>
-  <main>
-   <section className="hero-public"><div className="hero-copy"><div className="eyebrow"><i/> YOUR NEXT CHAPTER STARTS HERE</div><h1>Make every<br/>study session <em>count.</em></h1><p>A smarter, calmer way to master SAT Reading & Writing. Learn at your pace, practice with purpose, and feel confident on test day.</p><div className="hero-buttons"><button className="button button-primary" onClick={()=>setSignedIn(true)}>Enter the academy <ArrowRight size={17}/></button><a href="#approach">Discover our approach <ArrowUpRight size={16}/></a></div><div className="hero-proof"><div className="proof-icon"><GraduationCap/></div><div><b>A learning experience built around you</b><small>Clear guidance. Meaningful progress.</small></div></div></div>
-    <div className="hero-art"><div className="art-halo"/><div className="art-window"><div className="art-window-top"><span/><span/><span/><small>YOUR LEARNING SPACE</small></div><div className="art-welcome">Good afternoon, Alex <span>✦</span></div><p>Small steps lead to big progress.</p><div className="goal-box"><div><b>Today's learning goal</b><strong>65%</strong></div><div className="progress"><i/></div><small>2 of 3 activities completed</small></div><div className="art-label">PICK UP WHERE YOU LEFT OFF</div><div className="lesson-card"><span><BookOpen/></span><div><b>Transitions in context</b><small>Expression of Ideas · 12 min</small></div><ArrowUpRight/></div><div className="insight"><Sparkles/><div><b>A little insight for you</b><small>You're getting stronger at identifying the main idea.</small></div></div></div><div className="float-card float-one"><Zap/><div><b>Personalized practice</b><small>Made for your next step</small></div></div><div className="float-card float-two"><TrendingUp/><div><b>Progress that feels good</b><small>One question at a time</small></div></div></div>
-    <div className="hero-foot"><span>THOUGHTFUL LEARNING</span><span>SMARTER PRACTICE</span><span>CONFIDENT RESULTS</span></div>
-   </section>
-   <section className="trust"><span>EVERYTHING YOU NEED TO FEEL READY</span><div><b><ShieldCheck/> Structured learning</b><b><Brain/> AI-powered support</b><b><Clock3/> Practice at your pace</b><b><GraduationCap/> SAT-focused skills</b></div></section>
-   <section className="public-section" id="approach"><div className="eyebrow">A BETTER WAY TO PREPARE</div><div className="section-title"><h2>Less overwhelm.<br/><em>More understanding.</em></h2><p>Preparing for the SAT shouldn't feel like figuring everything out alone. Get a clear path, helpful explanations, and practice that makes sense.</p></div><div className="approach-cards"><article><span>01 / LEARN</span><div className="approach-icon blue"><BookOpen/></div><h3>Understand the why.</h3><p>Build real understanding with focused lessons, helpful examples, and explanations that make difficult ideas feel simple.</p></article><article><span>02 / PRACTICE</span><div className="approach-icon cream"><Target/></div><h3>Practice with purpose.</h3><p>Work through SAT-style questions, learn from every attempt, and build confidence one skill at a time.</p></article><article><span>03 / IMPROVE</span><div className="approach-icon violet"><TrendingUp/></div><h3>Know your next step.</h3><p>See your strengths, spot patterns in your mistakes, and get recommendations for what to focus on next.</p></article></div></section>
-   <section className="feature-band" id="programs"><div><div className="eyebrow light">SUPPORT THAT MOVES WITH YOU</div><h2>You're never<br/>stuck on <em>your own.</em></h2><p>Learn the four SAT Reading and Writing domains with clear explanations, focused practice, and feedback that helps you move forward.</p><ul><li><Check/> Information & Ideas</li><li><Check/> Craft & Structure</li><li><Check/> Expression of Ideas</li><li><Check/> Standard English Conventions</li></ul><button className="button button-light" onClick={()=>setSignedIn(true)}>Explore the learning space <ArrowRight/></button></div><div className="feature-visual"><div className="feature-chip"><Sparkles/> STUDY COMPANION</div><h3>Every question is a chance to understand more.</h3><div className="mini-chat"><span>YOU</span><p>Why is this answer correct?</p><span>YOUR STUDY COMPANION</span><p>Let's look at the evidence in the passage, then compare each answer choice step by step.</p></div></div></section>
-   <section className="public-section faq-public" id="faq"><div><div className="eyebrow">GOOD QUESTIONS</div><h2>Let's clear<br/><em>things up.</em></h2><p>A supportive, structured environment to help you prepare with confidence.</p></div><div className="faq-stack"><details open><summary>Is this platform suitable for beginners?</summary><p>Yes. The learning experience is designed to help students build confidence step by step.</p></details><details><summary>Can I practice specific SAT English skills?</summary><p>Yes. Practice can be organized around the four SAT Reading and Writing domains.</p></details><details><summary>Can parents follow student progress?</summary><p>Parent accounts are planned to provide access to reports for their linked children.</p></details></div></section>
-   <section className="cta-public"><div className="eyebrow light">YOUR JOURNEY STARTS WITH ONE STEP</div><h2>Ready to feel more<br/><em>confident?</em></h2><p>Build your skills, find your rhythm, and make your SAT preparation count.</p><button className="button button-light" onClick={()=>setSignedIn(true)}>Enter the academy <ArrowRight/></button></section>
-  </main><footer className="public-footer"><div className="brand"><span className="brand-mark">S<span>.</span></span><span><b>MRS. SHAIMAA SULAIMAN</b><small>SAT ENGLISH ACADEMY</small></span></div><p>Thoughtful preparation. Meaningful progress.</p><small>© {new Date().getFullYear()} Mrs. Shaimaa Sulaiman. All rights reserved.</small></footer>
+ if(authLoading) return <div className="auth-loading"><div className="auth-spinner"/><span>Connecting to the academy…</span></div>;
+ if(!signedIn) return <div className="login-page">
+  <section className="login-story">
+   <div className="login-brand"><span className="brand-mark">S<span>.</span></span><span><b>MRS. SHAIMAA SULAIMAN</b><small>SAT ENGLISH ACADEMY</small></span></div>
+   <div className="login-story-copy"><div className="login-eyebrow"><i/> YOUR LEARNING SPACE</div><h1>Prepare smarter.<br/><em>Grow with confidence.</em></h1><p>One academy. One account. Everything you need to build your SAT English skills and follow your progress.</p>
+    <div className="login-path"><div><BookOpen/><span><b>Learn the basics</b><small>Focused lessons and clear notes</small></span></div><div><Target/><span><b>Practice by skill</b><small>Question bank and three difficulty levels</small></span></div><div><Clock3/><span><b>Train for test day</b><small>Timed practice and mock exams</small></span></div><div><TrendingUp/><span><b>Track your progress</b><small>Reports and performance insights</small></span></div></div>
+   </div>
+   <div className="login-story-foot"><ShieldCheck size={16}/> A dedicated learning environment for the academy community.</div>
+   <div className="login-orbit orbit-a"/><div className="login-orbit orbit-b"/>
+  </section>
+  <section className="login-main"><div className="login-card">
+   <div className="login-card-mark"><LockKeyhole size={20}/></div><div className="login-eyebrow">ACADEMY PORTAL</div><h2>Welcome back</h2><p className="login-subtitle">Sign in with the account provided by your academy.</p>
+   <form onSubmit={handleLogin}>
+    <label htmlFor="academy-email">Email address</label><div className="login-input"><span><Users size={17}/></span><input id="academy-email" type="email" autoComplete="username" placeholder="you@example.com" value={loginEmail} onChange={e=>setLoginEmail(e.target.value)} required/></div>
+    <div className="login-password-label"><label htmlFor="academy-password">Password</label><button type="button" onClick={handleForgotPassword} disabled={loginLoading}>Forgot password?</button></div>
+    <div className="login-input"><span><LockKeyhole size={17}/></span><input id="academy-password" type={showPassword?'text':'password'} autoComplete="current-password" placeholder="Enter your password" value={loginPassword} onChange={e=>setLoginPassword(e.target.value)} required/><button type="button" className="password-toggle" onClick={()=>setShowPassword(!showPassword)} aria-label={showPassword?'Hide password':'Show password'}>{showPassword?<EyeOff size={17}/>:<Eye size={17}/>}</button></div>
+    {authError&&<div className="auth-message auth-error" role="alert">{authError}</div>}
+    {resetMessage&&<div className="auth-message auth-success" role="status">{resetMessage}</div>}
+    <button className="button button-primary login-submit" type="submit" disabled={loginLoading}>{loginLoading?'Please wait…':'Sign in to your account'} <ArrowRight size={17}/></button>
+   </form>
+   <div className="login-divider"><span>SECURE ACADEMY ACCESS</span></div><div className="login-security"><ShieldCheck size={16}/><span>Your dashboard is selected automatically using the role assigned to your account.</span></div>
+   <div className="login-role-note">Student · Parent · Assistant · Teacher · Admin · Developer</div>
+  </div><div className="login-copyright">© {new Date().getFullYear()} Mrs. Shaimaa Sulaiman SAT English Academy</div></section>
  </div>;
 
  return <div className="app-shell">
   <aside className={sidebar?'sidebar':'sidebar collapsed'}><div className="side-brand"><span className="brand-mark">S<span>.</span></span>{sidebar&&<div><b>SHAIMAA</b><small>ACADEMY PORTAL</small></div>}<button className="collapse" onClick={()=>setSidebar(!sidebar)}><Menu size={18}/></button></div>
    <div className="workspace-label">{sidebar?'WORKSPACE':''}</div><div className="side-nav">{navByRole[role].map((item,i)=>{const Icon=[LayoutDashboard,BookOpen,FileQuestion,ClipboardCheck,TrendingUp,CalendarDays,Users,Activity,Settings][i%9];return <button key={item} className={active===item?'side-link active':'side-link'} onClick={()=>setActive(item)} title={item}><Icon size={18}/>{sidebar&&<span>{item}</span>}</button>})}</div>
-   <div className="side-bottom"><button className="side-link" onClick={()=>flash('Help centre is not connected yet.')}><LifeBuoy size={18}/>{sidebar&&<span>Help centre</span>}</button><button className="side-link" onClick={logout}><LogOut size={18}/>{sidebar&&<span>Sign out</span>}</button><div className="profile-mini"><div className="avatar">SS</div>{sidebar&&<div><b>Shaimaa Academy</b><small>{role} demo view</small></div>}</div></div>
+   <div className="side-bottom"><button className="side-link" onClick={()=>flash('Help centre is not connected yet.')}><LifeBuoy size={18}/>{sidebar&&<span>Help centre</span>}</button><button className="side-link" onClick={logout}><LogOut size={18}/>{sidebar&&<span>Sign out</span>}</button><div className="profile-mini"><div className="avatar">SS</div>{sidebar&&<div><b>{profile?.display_name || 'Academy account'}</b><small>{role} workspace</small></div>}</div></div>
   </aside>
-  <main className="dashboard-main"><header className="dashboard-top"><button className="mobile-menu" onClick={()=>setSidebar(!sidebar)} aria-label="Toggle navigation"><Menu size={19}/></button><div className="crumb"><span>Academy</span><ChevronRight size={14}/><b>{active}</b></div><div className="top-actions"><span className="demo-pill"><i/> DEMO WORKSPACE</span><button className="icon-btn" onClick={()=>flash('You are all caught up.')}><Bell size={18}/></button><div className="top-avatar">SS</div></div></header>
-   <div className="dashboard-content"><div className="demo-warning"><ShieldCheck size={17}/><span><b>Preview mode:</b> This is an interactive front-end demonstration. Accounts, records, permissions, and saved data are not connected to a live backend.</span></div>
-    <div className="page-heading"><div><div className="eyebrow">MONDAY, 23 NOVEMBER 2026</div><h1>{active==='Overview'?'Good afternoon, Shaimaa.':active}</h1><p>{role==='Student'?'Your next step starts here. Keep building your skills, one session at a time.':role==='Parent'?'A clear view of your child’s learning journey.':role==='Developer'?'Monitor the platform and its technical operations.':'Manage learning, students, and academy activity from one place.'}</p></div><div className="heading-actions"><select value={role} onChange={e=>{setRole(e.target.value as Role);setActive('Overview')}} aria-label="Preview role">{roles.map(r=><option key={r}>{r}</option>)}</select><button className="button button-primary" onClick={()=>role==='Teacher'||role==='Assistant'||role==='Admin'?setModal(true):flash('This action will be enabled when the backend is connected.')}><Plus size={16}/> {role==='Student'?'Start practice':'Quick action'}</button></div></div>
-    {active==='Overview'&&<><div className="stat-grid"><div className="stat-card"><div><span>ACTIVE STUDENTS</span><Users/></div><strong>{students.length}</strong><small className="positive"><ArrowUpRight size={13}/> Demo records</small></div><div className="stat-card"><div><span>AVERAGE PRACTICE SCORE</span><Target/></div><strong>78%</strong><small className="positive"><TrendingUp size={13}/> Sample metric</small></div><div className="stat-card"><div><span>COMPLETED ACTIVITIES</span><ClipboardCheck/></div><strong>124</strong><small>Illustrative dashboard data</small></div><div className="stat-card"><div><span>UPCOMING EXAMS</span><CalendarDays/></div><strong>03</strong><small>Sample schedule</small></div></div>
-     <div className="dashboard-grid"><section className="panel performance"><div className="panel-head"><div><h3>Learning overview</h3><p>Illustrative weekly activity</p></div><button onClick={()=>setActive('My progress')}>View report <ArrowUpRight size={15}/></button></div><div className="chart-legend"><span><i/> Practice sessions</span><span><i/> Completed lessons</span></div><div className="bar-chart">{[42,67,53,83,61,92,73].map((v,i)=><div className="bar-column" key={i}><div className="bar-pair"><i style={{height:v+'%'}}/><i style={{height:(v*.64)+'%'}}/></div><small>{['Mon','Tue','Wed','Thu','Fri','Sat','Sun'][i]}</small></div>)}</div></section>
+  <main className="dashboard-main"><header className="dashboard-top"><button className="mobile-menu" onClick={()=>setSidebar(!sidebar)} aria-label="Toggle navigation"><Menu size={19}/></button><div className="crumb"><span>Academy</span><ChevronRight size={14}/><b>{active}</b></div><div className="top-actions"><span className="demo-pill secure-pill"><i/> SECURE SESSION</span><button className="icon-btn" onClick={()=>flash('You are all caught up.')}><Bell size={18}/></button><div className="top-avatar">SS</div></div></header>
+   <div className="dashboard-content"><div className="demo-warning connected-warning"><ShieldCheck size={17}/><span><b>Account connected:</b> {profile?.display_name || 'Academy user'} · Your dashboard and navigation are selected from your backend-assigned role: {role}.</span></div>
+    <div className="page-heading"><div><div className="eyebrow">MONDAY, 23 NOVEMBER 2026</div><h1>{active==='Overview'?'Good afternoon, {profile?.display_name || 'there'}.':active}</h1><p>{role==='Student'?'Your next step starts here. Keep building your skills, one session at a time.':role==='Parent'?'A clear view of your child’s learning journey.':role==='Developer'?'Monitor the platform and its technical operations.':'Manage learning, students, and academy activity from one place.'}</p></div><div className="heading-actions"><button className="button button-primary" onClick={()=>role==='Teacher'||role==='Assistant'||role==='Admin'?setModal(true):flash('This action will be enabled when the backend is connected.')}><Plus size={16}/> {role==='Student'?'Start practice':'Quick action'}</button></div></div>
+    {active==='Overview'&&<><div className="stat-grid"><div className="stat-card"><div><span>ACTIVE STUDENTS</span><Users/></div><strong>{students.length}</strong><small className="positive"><ArrowUpRight size={13}/> Sample records · not live</small></div><div className="stat-card"><div><span>AVERAGE PRACTICE SCORE</span><Target/></div><strong>78%</strong><small className="positive"><TrendingUp size={13}/> Sample metric</small></div><div className="stat-card"><div><span>COMPLETED ACTIVITIES</span><ClipboardCheck/></div><strong>124</strong><small>Sample dashboard data</small></div><div className="stat-card"><div><span>UPCOMING EXAMS</span><CalendarDays/></div><strong>03</strong><small>Sample schedule</small></div></div>
+     <div className="dashboard-grid"><section className="panel performance"><div className="panel-head"><div><h3>Learning overview</h3><p>Sample weekly activity</p></div><button onClick={()=>setActive('My progress')}>View report <ArrowUpRight size={15}/></button></div><div className="chart-legend"><span><i/> Practice sessions</span><span><i/> Completed lessons</span></div><div className="bar-chart">{[42,67,53,83,61,92,73].map((v,i)=><div className="bar-column" key={i}><div className="bar-pair"><i style={{height:v+'%'}}/><i style={{height:(v*.64)+'%'}}/></div><small>{['Mon','Tue','Wed','Thu','Fri','Sat','Sun'][i]}</small></div>)}</div></section>
       <section className="panel next-panel"><div className="panel-head"><div><h3>What's next</h3><p>Suggested next steps</p></div><Sparkles/></div><div className="next-item"><span className="next-icon"><BookOpen/></span><div><b>Transitions in context</b><small>Expression of Ideas · 12 min</small></div><ArrowRight/></div><div className="next-item"><span className="next-icon lavender"><FileQuestion/></span><div><b>Practice: punctuation</b><small>Standard English · 10 questions</small></div><ArrowRight/></div><div className="next-item"><span className="next-icon green"><Target/></span><div><b>Review your weak skills</b><small>Personal study recommendation</small></div><ArrowRight/></div></section></div>
      <div className="bottom-grid"><section className="panel"><div className="panel-head"><div><h3>Recent activity</h3><p>Latest updates in this demo</p></div><button onClick={()=>setActive('Activity log')}>View all</button></div><div className="activity-row"><span className="activity-dot blue-dot"/><div><b>Practice session completed</b><small>Information & Ideas · 8 minutes ago</small></div><strong>+12 XP</strong></div><div className="activity-row"><span className="activity-dot green-dot"/><div><b>Lesson marked complete</b><small>Transitions in context · Yesterday</small></div><strong>Done</strong></div><div className="activity-row"><span className="activity-dot violet-dot"/><div><b>New assignment available</b><small>Grammar review · 2 days ago</small></div><strong>New</strong></div></section><section className="panel goal-panel-dash"><div className="panel-head"><div><h3>Weekly goal</h3><p>Keep your learning streak going</p></div><Zap/></div><div className="goal-number">4 <small>/ 5 sessions</small></div><div className="progress large"><i style={{width:'80%'}}/></div><p>You are one session away from your weekly goal.</p></section></div>
     </>}
