@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ArrowRight, ArrowUpRight, BookOpen, BrainCircuit, Check, ChevronDown, CircleHelp, Clock3, GraduationCap, Menu, MessageCircle, Play, ShieldCheck, Sparkles, Target, TrendingUp, X, Zap } from 'lucide-react';
 
 const features = [
@@ -19,6 +19,29 @@ export default function App() {
   const [faqOpen, setFaqOpen] = useState<number | null>(0);
   const [showDemo, setShowDemo] = useState(false);
   const [language, setLanguage] = useState<'EN' | 'AR'>('EN');
+
+  useEffect(() => {
+    if (!('IntersectionObserver' in window) || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    const targets = document.querySelectorAll<HTMLElement>(
+      '.hero-copy, .hero-visual, .hero-bottom-line, .trust-strip, .section-kicker, .section-heading, .approach-card, .feature-copy, .chat-preview, .skill-item, .skills-footnote, .quote-section, .faq-section > div, .final-cta'
+    );
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('is-visible');
+          observer.unobserve(entry.target);
+        }
+      });
+    }, { threshold: 0.12, rootMargin: '0px 0px -35px 0px' });
+    targets.forEach((target, index) => {
+      target.classList.add('reveal-on-scroll');
+      if (target.classList.contains('approach-card') || target.classList.contains('skill-item')) {
+        target.style.setProperty('--reveal-delay', `${(index % 4) * 90}ms`);
+      }
+      observer.observe(target);
+    });
+    return () => observer.disconnect();
+  }, []);
 
   const closeMenu = () => setMenuOpen(false);
   const scrollTo = (id: string) => {
