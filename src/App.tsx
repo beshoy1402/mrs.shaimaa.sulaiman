@@ -36,6 +36,9 @@ export default function App() {
  const [showPassword,setShowPassword]=useState(false);
  const [authError,setAuthError]=useState('');
  const [resetMessage,setResetMessage]=useState('');
+ const [recoveryMode,setRecoveryMode]=useState(false);
+ const [newPassword,setNewPassword]=useState('');
+ const [confirmPassword,setConfirmPassword]=useState('');
  const [active,setActive]=useState('Overview');
  const [sidebar,setSidebar]=useState(true);
  const [search,setSearch]=useState('');
@@ -69,7 +72,8 @@ export default function App() {
    try{
     const {data,error}=await supabase.auth.getSession();
     if(error) throw error;
-    if(data.session?.user) await loadAccount(data.session.user.id);
+    if(window.location.hash.includes('type=recovery')) setRecoveryMode(true);
+    else if(data.session?.user) await loadAccount(data.session.user.id);
    }catch(error){
     if(alive){setProfile(null);setSignedIn(false);setAuthError(error instanceof Error?error.message:'Unable to restore your session. Please sign in again.');}
     await supabase.auth.signOut();
@@ -77,6 +81,7 @@ export default function App() {
   };
   void restore();
   const {data:{subscription}}=supabase.auth.onAuthStateChange((event)=>{
+   if(event==='PASSWORD_RECOVERY'&&alive){setRecoveryMode(true);setSignedIn(false);setAuthLoading(false);}
    if(event==='SIGNED_OUT'&&alive){setProfile(null);setSignedIn(false);setRole('Student');}
   });
   return ()=>{alive=false;subscription.unsubscribe();};
@@ -101,6 +106,18 @@ export default function App() {
   setLoginLoading(false);
   if(error)setAuthError(error.message);else setResetMessage('If an account exists for this email, a password reset link has been sent.');
  };
+ const handlePasswordUpdate=async(e:FormEvent)=>{
+  e.preventDefault();setAuthError('');setResetMessage('');
+  if(newPassword.length<8){setAuthError('Choose a password with at least 8 characters.');return;}
+  if(newPassword!==confirmPassword){setAuthError('The two passwords do not match.');return;}
+  setLoginLoading(true);
+  const {error}=await supabase.auth.updateUser({password:newPassword});
+  setLoginLoading(false);
+  if(error){setAuthError(error.message);return;}
+  await supabase.auth.signOut();
+  setRecoveryMode(false);setNewPassword('');setConfirmPassword('');setLoginPassword('');
+  setResetMessage('Your password has been updated. Sign in with your new password.');
+ };
  const addStudent=(e:FormEvent)=>{e.preventDefault();setStudents(old=>[...old,{id:Date.now(),name:newName,email:newEmail,group:newGroup,score:0,status:'New'}]);setModal(false);setNewName('');setNewEmail('');flash('Student added to this local preview. Student creation is not yet connected to the database.')};
  const RoleIcon=roleIcon(role);
  const logout=async()=>{await supabase.auth.signOut();setSignedIn(false);setProfile(null);setActive('Overview')};
@@ -116,15 +133,20 @@ export default function App() {
    <div className="login-orbit orbit-a"/><div className="login-orbit orbit-b"/>
   </section>
   <section className="login-main"><div className="login-card">
-   <div className="login-card-mark"><LockKeyhole size={20}/></div><div className="login-eyebrow">ACADEMY PORTAL</div><h2>Welcome back</h2><p className="login-subtitle">Sign in with the account provided by your academy.</p>
-   <form onSubmit={handleLogin}>
+   <div className="login-card-mark"><LockKeyhole size={20}/></div><div className="login-eyebrow">ACADEMY PORTAL</div><h2>{recoveryMode?'Reset your password':'Welcome back'}</h2><p className="login-subtitle">{recoveryMode?'Choose a new password to secure your academy account.':'Sign in with the account provided by your academy.'}</p>
+   {recoveryMode?<form onSubmit={handlePasswordUpdate}>
+    <label htmlFor="new-academy-password">New password</label><div className="login-input"><span><LockKeyhole size={17}/></span><input id="new-academy-password" type="password" autoComplete="new-password" placeholder="At least 8 characters" value={newPassword} onChange={e=>setNewPassword(e.target.value)} minLength={8} required/></div>
+    <label htmlFor="confirm-academy-password">Confirm new password</label><div className="login-input"><span><LockKeyhole size={17}/></span><input id="confirm-academy-password" type="password" autoComplete="new-password" placeholder="Enter it again" value={confirmPassword} onChange={e=>setConfirmPassword(e.target.value)} minLength={8} required/></div>
+    {authError&&<div className="auth-message auth-error" role="alert">{authError}</div>}
+    <button className="button button-primary login-submit" type="submit" disabled={loginLoading}>{loginLoading?'Saving…':'Update password'} <ArrowRight size={17}/></button>
+   </form>:<form onSubmit={handleLogin}>
     <label htmlFor="academy-email">Email address</label><div className="login-input"><span><Users size={17}/></span><input id="academy-email" type="email" autoComplete="username" placeholder="you@example.com" value={loginEmail} onChange={e=>setLoginEmail(e.target.value)} required/></div>
     <div className="login-password-label"><label htmlFor="academy-password">Password</label><button type="button" onClick={handleForgotPassword} disabled={loginLoading}>Forgot password?</button></div>
     <div className="login-input"><span><LockKeyhole size={17}/></span><input id="academy-password" type={showPassword?'text':'password'} autoComplete="current-password" placeholder="Enter your password" value={loginPassword} onChange={e=>setLoginPassword(e.target.value)} required/><button type="button" className="password-toggle" onClick={()=>setShowPassword(!showPassword)} aria-label={showPassword?'Hide password':'Show password'}>{showPassword?<EyeOff size={17}/>:<Eye size={17}/>}</button></div>
     {authError&&<div className="auth-message auth-error" role="alert">{authError}</div>}
     {resetMessage&&<div className="auth-message auth-success" role="status">{resetMessage}</div>}
     <button className="button button-primary login-submit" type="submit" disabled={loginLoading}>{loginLoading?'Please wait…':'Sign in to your account'} <ArrowRight size={17}/></button>
-   </form>
+   </form>}
    <div className="login-divider"><span>SECURE ACADEMY ACCESS</span></div><div className="login-security"><ShieldCheck size={16}/><span>Your dashboard is selected automatically using the role assigned to your account.</span></div>
    <div className="login-role-note">Student · Parent · Assistant · Teacher · Admin · Developer</div>
   </div><div className="login-copyright">© {new Date().getFullYear()} Mrs. Shaimaa Sulaiman SAT English Academy</div></section>
