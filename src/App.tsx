@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ArrowRight, ArrowUpRight, BookOpen, BrainCircuit, Check, ChevronDown, CircleHelp, Clock3, GraduationCap, Menu, MessageCircle, Play, ShieldCheck, Sparkles, Target, TrendingUp, X, Zap } from 'lucide-react';
+import { ArrowLeft, ArrowRight, ArrowUpRight, BookOpen, BrainCircuit, Check, ChevronDown, CircleHelp, Clock3, Code2, Eye, EyeOff, GraduationCap, KeyRound, LockKeyhole, Mail, Menu, Play, ShieldCheck, Sparkles, Target, UserRound, Users, ClipboardList, X, Zap } from 'lucide-react';
 
 const features = [
   { icon: BrainCircuit, title: 'A tutor that gets you', text: 'Ask questions in your own words. Get clear, step-by-step explanations that meet you at your level.' },
@@ -19,6 +19,9 @@ export default function App() {
   const [faqOpen, setFaqOpen] = useState<number | null>(0);
   const [showDemo, setShowDemo] = useState(false);
   const [language, setLanguage] = useState<'EN' | 'AR'>('EN');
+  const [selectedRole, setSelectedRole] = useState('Student');
+  const [showPassword, setShowPassword] = useState(false);
+  const [loginMessage, setLoginMessage] = useState('');
 
   useEffect(() => {
     if (!('IntersectionObserver' in window) || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
@@ -131,7 +134,52 @@ export default function App() {
 
       <footer className="footer"><a className="brand footer-brand" href="#"><span className="brand-mark">S<span>.</span></span><span className="brand-copy"><strong>MRS. SHAIMAA SULAIMAN</strong><small>SAT ENGLISH ACADEMY</small></span></a><p>Thoughtful preparation. Meaningful progress.</p><div className="footer-bottom"><span>© {new Date().getFullYear()} Mrs. Shaimaa Sulaiman. All rights reserved.</span><div><a href="#approach">Our approach</a><a href="#faq">FAQs</a><button onClick={() => setShowDemo(true)}>Student sign in</button></div></div></footer>
 
-      {showDemo && <div className="modal-backdrop" role="presentation" onClick={() => setShowDemo(false)}><div className="demo-modal" role="dialog" aria-modal="true" aria-labelledby="modal-title" onClick={e => e.stopPropagation()}><button className="modal-close" aria-label="Close" onClick={() => setShowDemo(false)}><X/></button><div className="modal-icon"><GraduationCap size={25}/></div><div className="section-kicker">STUDENT PORTAL</div><h2 id="modal-title">Your learning journey<br/><em>starts here.</em></h2><p>The student portal is being prepared. Sign-in and account access will be connected during the platform build.</p><button className="primary-btn modal-action" onClick={() => setShowDemo(false)}>Got it <Check size={17}/></button></div></div>}
+      {showDemo && <div className="login-screen">
+        <div className="login-topbar">
+          <a className="brand" href="#" onClick={(e) => { e.preventDefault(); setShowDemo(false); }} aria-label="Back to academy home">
+            <span className="brand-mark">S<span>.</span></span>
+            <span className="brand-copy"><strong>MRS. SHAIMAA SULAIMAN</strong><small>SAT ENGLISH ACADEMY</small></span>
+          </a>
+          <button className="login-back" onClick={() => { setShowDemo(false); setLoginMessage(''); }}><ArrowLeft size={16}/> Back to website</button>
+        </div>
+        <div className="login-layout">
+          <section className="login-intro">
+            <div className="login-orb login-orb-one"/><div className="login-orb login-orb-two"/>
+            <div className="login-intro-content">
+              <div className="login-kicker"><span/> YOUR LEARNING SPACE</div>
+              <h1>Welcome back<br/>to your <em>next step.</em></h1>
+              <p>A focused space for learning, teaching, and helping every student make meaningful progress.</p>
+              <div className="login-points"><span><ShieldCheck size={17}/> Role-based access</span><span><BookOpen size={17}/> SAT-focused learning</span><span><Sparkles size={17}/> Progress that matters</span></div>
+              <div className="login-quote">“Small steps, taken consistently, lead to remarkable progress.”</div>
+            </div>
+          </section>
+          <section className="login-panel-wrap">
+            <form className="login-panel" onSubmit={(e) => { e.preventDefault(); setLoginMessage('Sign-in is not connected yet. Your account will be verified here once authentication is configured.'); }}>
+              <div className="login-panel-heading"><div className="login-panel-icon"><LockKeyhole size={21}/></div><div className="section-kicker">SECURE ACCOUNT ACCESS</div><h2>Sign in to continue</h2><p>Choose your account type, then enter your credentials.</p></div>
+              <div className="role-label">I AM SIGNING IN AS</div>
+              <div className="role-grid">
+                {[
+                  {name:'Student',icon:GraduationCap,desc:'Learn & practice'},
+                  {name:'Parent',icon:Users,desc:'Track progress'},
+                  {name:'Assistant',icon:ClipboardList,desc:'Academic support'},
+                  {name:'Teacher',icon:UserRound,desc:'Teach & manage'},
+                  {name:'Admin',icon:ShieldCheck,desc:'Platform operations'},
+                  {name:'Developer',icon:Code2,desc:'Technical control'}
+                ].map(({name,icon:RoleIcon,desc}) => <button type="button" key={name} className={selectedRole===name?'role-option selected':'role-option'} onClick={() => { setSelectedRole(name); setLoginMessage(''); }} aria-pressed={selectedRole===name}><RoleIcon size={18}/><span><strong>{name}</strong><small>{desc}</small></span>{selectedRole===name&&<Check className="role-check" size={15}/>}</button>)}
+              </div>
+              <label className="login-field-label" htmlFor="login-email">Email address</label>
+              <div className="login-input-wrap"><Mail size={17}/><input id="login-email" type="email" placeholder="you@example.com" autoComplete="username" required/></div>
+              <div className="login-password-heading"><label className="login-field-label" htmlFor="login-password">Password</label><button type="button" className="forgot-password" onClick={() => setLoginMessage('Password recovery will be available after account authentication is connected.')}>Forgot password?</button></div>
+              <div className="login-input-wrap"><KeyRound size={17}/><input id="login-password" type={showPassword?'text':'password'} placeholder="Enter your password" autoComplete="current-password" required/><button type="button" className="password-toggle" aria-label={showPassword?'Hide password':'Show password'} onClick={() => setShowPassword(!showPassword)}>{showPassword?<EyeOff size={17}/>:<Eye size={17}/>}</button></div>
+              {loginMessage&&<div className="login-message" role="status">{loginMessage}</div>}
+              <button className="login-submit" type="submit">Sign in as {selectedRole}<ArrowRight size={17}/></button>
+              <div className="login-security"><ShieldCheck size={15}/> Your account access is protected by role permissions.</div>
+              <div className="login-help">Need help accessing your account? <a href="mailto:">Contact the academy</a></div>
+            </form>
+          </section>
+        </div>
+        <div className="login-footer"><span>© {new Date().getFullYear()} Mrs. Shaimaa Sulaiman SAT English Academy</span><span>Thoughtful preparation. Meaningful progress.</span></div>
+      </div>}
     </div>
   );
 }
