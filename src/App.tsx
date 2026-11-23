@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ArrowLeft, ArrowRight, ArrowUpRight, BookOpen, BrainCircuit, Check, ChevronDown, CircleHelp, Clock3, Code2, Eye, EyeOff, GraduationCap, KeyRound, LockKeyhole, Mail, Menu, Play, ShieldCheck, Sparkles, Target, UserRound, Users, ClipboardList, X, Zap } from 'lucide-react';
+import { ArrowLeft, ArrowRight, ArrowUpRight, BookOpen, BrainCircuit, Check, ChevronDown, CircleHelp, Clock3, Code2, Eye, EyeOff, GraduationCap, KeyRound, LockKeyhole, Mail, Menu, Play, ShieldCheck, Sparkles, Target, TrendingUp, UserRound, Users, ClipboardList, X, Zap } from 'lucide-react';
 
 const features = [
   { icon: BrainCircuit, title: 'A tutor that gets you', text: 'Ask questions in your own words. Get clear, step-by-step explanations that meet you at your level.' },
