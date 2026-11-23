@@ -1,185 +1,88 @@
-import { useEffect, useState } from 'react';
-import { ArrowLeft, ArrowRight, ArrowUpRight, BookOpen, BrainCircuit, Check, ChevronDown, CircleHelp, Clock3, Code2, Eye, EyeOff, GraduationCap, KeyRound, LockKeyhole, Mail, Menu, Play, ShieldCheck, Sparkles, Target, TrendingUp, UserRound, Users, ClipboardList, X, Zap } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { Activity, ArrowDownRight, ArrowRight, ArrowUpRight, Bell, BookOpen, Brain, CalendarDays, Check, ChevronDown, ChevronLeft, ChevronRight, CircleHelp, ClipboardCheck, Clock3, Code2, Download, FileQuestion, GraduationCap, LayoutDashboard, LifeBuoy, LockKeyhole, LogOut, Menu, MessageCircle, Plus, Search, Settings, ShieldCheck, Sparkles, Target, TrendingUp, Users, X, Zap } from 'lucide-react';
 
-const features = [
-  { icon: BrainCircuit, title: 'A tutor that gets you', text: 'Ask questions in your own words. Get clear, step-by-step explanations that meet you at your level.' },
-  { icon: Target, title: 'Practice with a purpose', text: 'Focus on the exact skills you need to improve, from transitions to inference and grammar.' },
-  { icon: TrendingUp, title: 'See your progress clearly', text: 'Understand what is improving, what needs attention, and what to work on next.' },
+type Role = 'Student' | 'Parent' | 'Assistant' | 'Teacher' | 'Admin' | 'Developer';
+type Student = { id:number; name:string; email:string; group:string; score:number; status:string };
+const roles: Role[] = ['Student','Parent','Assistant','Teacher','Admin','Developer'];
+const initialStudents: Student[] = [
+  {id:1,name:'Mariam Ahmed',email:'mariam.ahmed@example.com',group:'G12-A',score:720,status:'Active'},
+  {id:2,name:'Omar Khaled',email:'omar.khaled@example.com',group:'G12-A',score:680,status:'Active'},
+  {id:3,name:'Nour Youssef',email:'nour.youssef@example.com',group:'G12-B',score:760,status:'Active'},
+  {id:4,name:'Adam Hany',email:'adam.hany@example.com',group:'G12-B',score:640,status:'Needs support'},
 ];
-
-const skills = ['Information & Ideas', 'Craft & Structure', 'Expression of Ideas', 'Standard English Conventions'];
-const faqs = [
-  ['Is this platform suitable for beginners?', 'Absolutely. Lessons and explanations are designed to be clear and supportive, whether you are just starting or aiming for a higher score.'],
-  ['Can I practice specific SAT English skills?', 'Yes. You can focus on individual Reading and Writing domains, choose practice lengths, and revisit questions you found difficult.'],
-  ['How does the AI tutor help?', 'The AI tutor can explain questions, clarify grammar concepts, compare answer choices, and suggest targeted practice.'],
+const navByRole: Record<Role,string[]> = {
+ Student:['Overview','My courses','Practice','Mock exams','My progress','Assignments'],
+ Parent:['Overview','My children','Progress reports','Attendance','Messages'],
+ Assistant:['Overview','Students','Attendance','Assignments','Question bank','Messages'],
+ Teacher:['Overview','My classes','Students','Question bank','Assignments','Exams','Reports'],
+ Admin:['Overview','Users & roles','Courses','Enrollments','Payments','Reports','Settings'],
+ Developer:['Overview','System health','AI providers','Deployments','Security','Backups','Activity log'],
+};
+const questions = [
+ {domain:'Information & Ideas',question:'Which choice best states the main purpose of the passage?',passage:'Urban gardens do more than provide fresh produce. In several cities, researchers have found that community gardens also create shared spaces where neighbors exchange knowledge and build stronger social connections.',answers:['To argue that urban gardens should replace public parks','To describe multiple benefits of community gardens','To explain why cities are reducing green spaces','To compare the cost of urban and rural farming'],correct:1,explain:'The passage explicitly identifies two benefits: fresh produce and stronger community connections.'},
+ {domain:'Expression of Ideas',question:'Which transition best completes the sentence?',passage:'The first experiment produced promising results. _____, the research team decided to repeat the test with a larger sample.',answers:['Nevertheless','For example','Accordingly','Meanwhile'],correct:2,explain:'“Accordingly” signals that the second action follows logically from the promising first result.'},
+ {domain:'Standard English Conventions',question:'Which choice completes the sentence according to standard English conventions?',passage:'The collection of rare manuscripts _____ stored in a climate-controlled room.',answers:['are','were','is','have been'],correct:2,explain:'The subject is the singular noun “collection,” so the singular verb “is” is required.'}
 ];
+const roleIcon = (role:Role) => role==='Student'?GraduationCap:role==='Parent'?Users:role==='Assistant'?ClipboardCheck:role==='Teacher'?BookOpen:role==='Admin'?ShieldCheck:Code2;
 
 export default function App() {
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [faqOpen, setFaqOpen] = useState<number | null>(0);
-  const [showDemo, setShowDemo] = useState(false);
-  const [language, setLanguage] = useState<'EN' | 'AR'>('EN');
-  const [selectedRole, setSelectedRole] = useState('Student');
-  const [showPassword, setShowPassword] = useState(false);
-  const [loginMessage, setLoginMessage] = useState('');
+ const [role,setRole]=useState<Role>('Student');
+ const [signedIn,setSignedIn]=useState(false);
+ const [active,setActive]=useState('Overview');
+ const [sidebar,setSidebar]=useState(true);
+ const [search,setSearch]=useState('');
+ const [students,setStudents]=useState(initialStudents);
+ const [modal,setModal]=useState(false);
+ const [newName,setNewName]=useState('');
+ const [newEmail,setNewEmail]=useState('');
+ const [newGroup,setNewGroup]=useState('G12-A');
+ const [qIndex,setQIndex]=useState(0);
+ const [answer,setAnswer]=useState<number|null>(null);
+ const [showExplanation,setShowExplanation]=useState(false);
+ const [notice,setNotice]=useState('');
+ const [language,setLanguage]=useState<'EN'|'AR'>('EN');
+ const filtered=useMemo(()=>students.filter(s=>(s.name+' '+s.email+' '+s.group).toLowerCase().includes(search.toLowerCase())),[students,search]);
+ const flash=(message:string)=>{setNotice(message);window.setTimeout(()=>setNotice(''),3200)};
+ const enter=(e:React.FormEvent)=>{e.preventDefault();setSignedIn(true);setActive('Overview')};
+ const addStudent=(e:React.FormEvent)=>{e.preventDefault();setStudents(old=>[...old,{id:Date.now(),name:newName,email:newEmail,group:newGroup,score:0,status:'New'}]);setModal(false);setNewName('');setNewEmail('');flash('Student added to this demo workspace.')};
+ const RoleIcon=roleIcon(role);
+ const logout=()=>{setSignedIn(false);setActive('Overview')};
 
-  useEffect(() => {
-    if (!('IntersectionObserver' in window) || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-    const targets = document.querySelectorAll<HTMLElement>(
-      '.hero-copy, .hero-visual, .hero-bottom-line, .trust-strip, .section-kicker, .section-heading, .approach-card, .feature-copy, .chat-preview, .skill-item, .skills-footnote, .quote-section, .faq-section > div, .final-cta'
-    );
-    const observer = new IntersectionObserver((entries) => {
-      entries.forEach((entry) => {
-        if (entry.isIntersecting) {
-          entry.target.classList.add('is-visible');
-          observer.unobserve(entry.target);
-        }
-      });
-    }, { threshold: 0.12, rootMargin: '0px 0px -35px 0px' });
-    targets.forEach((target, index) => {
-      target.classList.add('reveal-on-scroll');
-      if (target.classList.contains('approach-card') || target.classList.contains('skill-item')) {
-        target.style.setProperty('--reveal-delay', `${(index % 4) * 90}ms`);
-      }
-      observer.observe(target);
-    });
-    return () => observer.disconnect();
-  }, []);
+ if(!signedIn) return <div className="public-site">
+  <div className="announcement"><Sparkles size={14}/> A more personal way to prepare for the SAT <span>Learn with confidence <ArrowUpRight size={13}/></span></div>
+  <header className="public-nav"><a className="brand" href="#"><span className="brand-mark">S<span>.</span></span><span><b>MRS. SHAIMAA SULAIMAN</b><small>SAT ENGLISH ACADEMY</small></span></a><nav><a href="#approach">Our approach</a><a href="#programs">SAT skills</a><a href="#faq">FAQs</a></nav><div className="nav-tools"><button className="language-btn" onClick={()=>setLanguage(language==='EN'?'AR':'EN')}>{language==='EN'?'العربية':'English'}</button><button className="button button-dark" onClick={()=>setSignedIn(true)}>Sign in <ArrowUpRight size={16}/></button></div></header>
+  <main>
+   <section className="hero-public"><div className="hero-copy"><div className="eyebrow"><i/> YOUR NEXT CHAPTER STARTS HERE</div><h1>Make every<br/>study session <em>count.</em></h1><p>A smarter, calmer way to master SAT Reading & Writing. Learn at your pace, practice with purpose, and feel confident on test day.</p><div className="hero-buttons"><button className="button button-primary" onClick={()=>setSignedIn(true)}>Enter the academy <ArrowRight size={17}/></button><a href="#approach">Discover our approach <ArrowUpRight size={16}/></a></div><div className="hero-proof"><div className="proof-icon"><GraduationCap/></div><div><b>A learning experience built around you</b><small>Clear guidance. Meaningful progress.</small></div></div></div>
+    <div className="hero-art"><div className="art-halo"/><div className="art-window"><div className="art-window-top"><span/><span/><span/><small>YOUR LEARNING SPACE</small></div><div className="art-welcome">Good afternoon, Alex <span>✦</span></div><p>Small steps lead to big progress.</p><div className="goal-box"><div><b>Today's learning goal</b><strong>65%</strong></div><div className="progress"><i/></div><small>2 of 3 activities completed</small></div><div className="art-label">PICK UP WHERE YOU LEFT OFF</div><div className="lesson-card"><span><BookOpen/></span><div><b>Transitions in context</b><small>Expression of Ideas · 12 min</small></div><ArrowUpRight/></div><div className="insight"><Sparkles/><div><b>A little insight for you</b><small>You're getting stronger at identifying the main idea.</small></div></div></div><div className="float-card float-one"><Zap/><div><b>Personalized practice</b><small>Made for your next step</small></div></div><div className="float-card float-two"><TrendingUp/><div><b>Progress that feels good</b><small>One question at a time</small></div></div></div>
+    <div className="hero-foot"><span>THOUGHTFUL LEARNING</span><span>SMARTER PRACTICE</span><span>CONFIDENT RESULTS</span></div>
+   </section>
+   <section className="trust"><span>EVERYTHING YOU NEED TO FEEL READY</span><div><b><ShieldCheck/> Structured learning</b><b><Brain/> AI-powered support</b><b><Clock3/> Practice at your pace</b><b><GraduationCap/> SAT-focused skills</b></div></section>
+   <section className="public-section" id="approach"><div className="eyebrow">A BETTER WAY TO PREPARE</div><div className="section-title"><h2>Less overwhelm.<br/><em>More understanding.</em></h2><p>Preparing for the SAT shouldn't feel like figuring everything out alone. Get a clear path, helpful explanations, and practice that makes sense.</p></div><div className="approach-cards"><article><span>01 / LEARN</span><div className="approach-icon blue"><BookOpen/></div><h3>Understand the why.</h3><p>Build real understanding with focused lessons, helpful examples, and explanations that make difficult ideas feel simple.</p></article><article><span>02 / PRACTICE</span><div className="approach-icon cream"><Target/></div><h3>Practice with purpose.</h3><p>Work through SAT-style questions, learn from every attempt, and build confidence one skill at a time.</p></article><article><span>03 / IMPROVE</span><div className="approach-icon violet"><TrendingUp/></div><h3>Know your next step.</h3><p>See your strengths, spot patterns in your mistakes, and get recommendations for what to focus on next.</p></article></div></section>
+   <section className="feature-band" id="programs"><div><div className="eyebrow light">SUPPORT THAT MOVES WITH YOU</div><h2>You're never<br/>stuck on <em>your own.</em></h2><p>Learn the four SAT Reading and Writing domains with clear explanations, focused practice, and feedback that helps you move forward.</p><ul><li><Check/> Information & Ideas</li><li><Check/> Craft & Structure</li><li><Check/> Expression of Ideas</li><li><Check/> Standard English Conventions</li></ul><button className="button button-light" onClick={()=>setSignedIn(true)}>Explore the learning space <ArrowRight/></button></div><div className="feature-visual"><div className="feature-chip"><Sparkles/> STUDY COMPANION</div><h3>Every question is a chance to understand more.</h3><div className="mini-chat"><span>YOU</span><p>Why is this answer correct?</p><span>YOUR STUDY COMPANION</span><p>Let's look at the evidence in the passage, then compare each answer choice step by step.</p></div></div></section>
+   <section className="public-section faq-public" id="faq"><div><div className="eyebrow">GOOD QUESTIONS</div><h2>Let's clear<br/><em>things up.</em></h2><p>A supportive, structured environment to help you prepare with confidence.</p></div><div className="faq-stack"><details open><summary>Is this platform suitable for beginners?</summary><p>Yes. The learning experience is designed to help students build confidence step by step.</p></details><details><summary>Can I practice specific SAT English skills?</summary><p>Yes. Practice can be organized around the four SAT Reading and Writing domains.</p></details><details><summary>Can parents follow student progress?</summary><p>Parent accounts are planned to provide access to reports for their linked children.</p></details></div></section>
+   <section className="cta-public"><div className="eyebrow light">YOUR JOURNEY STARTS WITH ONE STEP</div><h2>Ready to feel more<br/><em>confident?</em></h2><p>Build your skills, find your rhythm, and make your SAT preparation count.</p><button className="button button-light" onClick={()=>setSignedIn(true)}>Enter the academy <ArrowRight/></button></section>
+  </main><footer className="public-footer"><div className="brand"><span className="brand-mark">S<span>.</span></span><span><b>MRS. SHAIMAA SULAIMAN</b><small>SAT ENGLISH ACADEMY</small></span></div><p>Thoughtful preparation. Meaningful progress.</p><small>© {new Date().getFullYear()} Mrs. Shaimaa Sulaiman. All rights reserved.</small></footer>
+ </div>;
 
-  const closeMenu = () => setMenuOpen(false);
-  const scrollTo = (id: string) => {
-    document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' });
-    closeMenu();
-  };
-
-  return (
-    <div className="site-shell">
-      <div className="announcement"><Sparkles size={14} /> A more personal way to prepare for the SAT <span>Explore the academy <ArrowUpRight size={13} /></span></div>
-      <header className="topbar">
-        <a className="brand" href="#" aria-label="Mrs. Shaimaa Sulaiman home">
-          <span className="brand-mark">S<span>.</span></span>
-          <span className="brand-copy"><strong>MRS. SHAIMAA SULAIMAN</strong><small>SAT ENGLISH ACADEMY</small></span>
-        </a>
-        <nav className={menuOpen ? 'nav-links open' : 'nav-links'}>
-          <a href="#approach" onClick={closeMenu}>Our approach</a>
-          <a href="#features" onClick={closeMenu}>Why learn with us</a>
-          <a href="#skills" onClick={closeMenu}>SAT skills</a>
-          <a href="#faq" onClick={closeMenu}>FAQs</a>
-          <button className="mobile-language" onClick={() => setLanguage(language === 'EN' ? 'AR' : 'EN')}>{language === 'EN' ? 'العربية' : 'English'}</button>
-          <button className="mobile-login" onClick={() => setShowDemo(true)}>Student sign in <ArrowRight size={16}/></button>
-        </nav>
-        <div className="nav-actions">
-          <button className="language-btn" onClick={() => setLanguage(language === 'EN' ? 'AR' : 'EN')}>{language === 'EN' ? 'العربية' : 'English'}</button>
-          <button className="login-btn" onClick={() => setShowDemo(true)}>Student sign in <ArrowUpRight size={15}/></button>
-          <button className="menu-btn" aria-label="Toggle menu" onClick={() => setMenuOpen(!menuOpen)}>{menuOpen ? <X/> : <Menu/>}</button>
-        </div>
-      </header>
-
-      <main>
-        <section className="hero">
-          <div className="hero-copy">
-            <div className="eyebrow"><span className="eyebrow-dot"/> YOUR NEXT CHAPTER STARTS HERE</div>
-            <h1>Make every<br/>study session <em>count.</em></h1>
-            <p className="hero-lead">A smarter, calmer way to master SAT Reading &amp; Writing. Learn at your pace, practice with purpose, and feel confident on test day.</p>
-            <div className="hero-actions">
-              <button className="primary-btn" onClick={() => setShowDemo(true)}>Start learning <ArrowRight size={18}/></button>
-              <button className="text-btn" onClick={() => scrollTo('approach')}><span className="play-circle"><Play size={13} fill="currentColor"/></span> Discover our approach</button>
-            </div>
-            <div className="hero-proof"><div className="avatar-stack"><span>S</span><span>A</span><span>M</span><span>+</span></div><div><strong>A learning experience built around you</strong><small>Clear guidance. Meaningful progress.</small></div></div>
-          </div>
-          <div className="hero-visual">
-            <div className="visual-glow"/>
-            <div className="study-card">
-              <div className="card-top"><span className="live-dot"/> YOUR LEARNING SPACE <span className="more-dots">•••</span></div>
-              <div className="greeting">Good afternoon, Alex <span>✦</span></div>
-              <p className="muted">Small steps lead to big progress.</p>
-              <div className="goal-panel">
-                <div className="goal-head"><span>Today's learning goal</span><strong>65%</strong></div>
-                <div className="progress-track"><span/></div>
-                <small>2 of 3 activities completed</small>
-              </div>
-              <div className="next-label">PICK UP WHERE YOU LEFT OFF</div>
-              <div className="lesson-row"><div className="lesson-icon"><BookOpen size={20}/></div><div className="lesson-info"><strong>Transitions in context</strong><small>Expression of Ideas · 12 min</small></div><button aria-label="Continue lesson" onClick={() => setShowDemo(true)}><ArrowUpRight size={17}/></button></div>
-              <div className="insight-card"><div className="insight-icon"><Sparkles size={17}/></div><div><strong>A little insight for you</strong><p>You're getting stronger at identifying the main idea. Keep it up!</p></div></div>
-            </div>
-            <div className="floating-note note-top"><span className="note-icon"><Zap size={15}/></span><div><strong>Personalized practice</strong><small>Made for your next step</small></div></div>
-            <div className="floating-note note-bottom"><div className="mini-ring">↗</div><div><strong>Progress that feels good</strong><small>One question at a time</small></div></div>
-            <div className="hero-orbit orbit-one"/><div className="hero-orbit orbit-two"/>
-          </div>
-          <div className="hero-bottom-line"><span>THOUGHTFUL LEARNING</span><span>SMARTER PRACTICE</span><span>CONFIDENT RESULTS</span></div>
-        </section>
-
-        <section className="trust-strip"><p>EVERYTHING YOU NEED TO FEEL READY</p><div><span><ShieldCheck/> Structured learning</span><span><BrainCircuit/> AI-powered support</span><span><Clock3/> Practice at your pace</span><span><GraduationCap/> SAT-focused skills</span></div></section>
-
-        <section className="approach section-wrap" id="approach">
-          <div className="section-kicker">A BETTER WAY TO PREPARE</div>
-          <div className="section-heading"><h2>Less overwhelm.<br/><em>More understanding.</em></h2><p>Preparing for the SAT shouldn't feel like figuring everything out alone. Get a clear path, helpful explanations, and practice that makes sense.</p></div>
-          <div className="approach-grid">
-            <article className="approach-card approach-blue"><div className="number">01 / LEARN</div><div className="approach-art"><div className="book-art"><BookOpen size={38}/><span>Learn with clarity</span></div></div><h3>Understand the why.</h3><p>Build real understanding with focused lessons, helpful examples, and explanations that make difficult ideas feel simple.</p><button onClick={() => scrollTo('skills')}>Explore learning <ArrowUpRight size={16}/></button></article>
-            <article className="approach-card approach-pale"><div className="number">02 / PRACTICE</div><div className="approach-art"><div className="practice-art"><Target size={43}/><span>Practice with purpose</span></div></div><h3>Practice with purpose.</h3><p>Work through SAT-style questions, learn from every attempt, and build confidence one skill at a time.</p><button onClick={() => setShowDemo(true)}>Try a practice session <ArrowUpRight size={16}/></button></article>
-            <article className="approach-card approach-lavender"><div className="number">03 / IMPROVE</div><div className="approach-art"><div className="chart-art"><TrendingUp size={43}/><span>Progress you can see</span></div></div><h3>Know your next step.</h3><p>See your strengths, spot patterns in your mistakes, and get recommendations for what to focus on next.</p><button onClick={() => setShowDemo(true)}>See how it works <ArrowUpRight size={16}/></button></article>
-          </div>
-        </section>
-
-        <section className="feature-section" id="features"><div className="feature-inner"><div className="feature-copy"><div className="section-kicker light-kicker">SUPPORT THAT MOVES WITH YOU</div><h2>You're never<br/>stuck on <em>your own.</em></h2><p>Meet your AI study companion. Get a thoughtful explanation, ask one more question, or look at a concept from a different angle — whenever you need it.</p><ul><li><Check/> Explanations in simple, clear language</li><li><Check/> Help understanding every answer choice</li><li><Check/> Practice recommendations based on your progress</li></ul><button className="white-btn" onClick={() => setShowDemo(true)}>Meet your AI tutor <ArrowRight size={17}/></button></div><div className="chat-preview"><div className="chat-head"><div className="ai-avatar"><Sparkles size={17}/></div><div><strong>Your study companion</strong><small><span/> Here to help you learn</small></div><span className="chat-menu">•••</span></div><div className="chat-body"><div className="chat-date">TODAY · STUDY SESSION</div><div className="bubble student-bubble">I don't understand when to use a transition like “however”.</div><div className="bubble ai-bubble"><div className="bubble-label"><Sparkles size={13}/> STUDY COMPANION</div>Think of <b>“however”</b> as a bridge that shows contrast. It tells the reader that the next idea is different from what came before.<div className="example-box"><small>QUICK EXAMPLE</small><p>It was raining. <b>However,</b> we went outside.</p></div>Want to try a quick question together?</div><div className="suggestions"><span>Give me an example</span><span>Practice this skill</span></div></div><div className="chat-input">Ask anything about SAT English... <span><ArrowUpRight size={16}/></span></div></div></div></section>
-
-        <section className="skills-section section-wrap" id="skills"><div className="section-kicker">BUILT AROUND THE SAT</div><div className="section-heading"><h2>Four domains.<br/><em>One confident you.</em></h2><p>Build the skills tested in SAT Reading and Writing with organized, focused practice.</p></div><div className="skill-list">{skills.map((skill,i)=><button className="skill-item" key={skill} onClick={() => setShowDemo(true)}><span className="skill-index">0{i+1}</span><strong>{skill}</strong><span className="skill-desc">{['Understand information, ideas, and evidence','Explore words, purpose, and connections','Develop ideas and choose effective transitions','Master grammar, punctuation, and sentence structure'][i]}</span><span className="skill-arrow"><ArrowUpRight size={19}/></span></button>)}</div><div className="skills-footnote"><CircleHelp size={16}/> Not sure where to start? Your learning path can help you find the right next step.</div></section>
-
-        <section className="quote-section"><div className="quote-mark">“</div><blockquote>Confidence doesn't come from knowing every answer. It comes from knowing <em>how to find it.</em></blockquote><div className="quote-rule"/><p>MRS. SHAIMAA SULAIMAN <span>·</span> SAT ENGLISH ACADEMY</p></section>
-
-        <section className="faq-section section-wrap" id="faq"><div><div className="section-kicker">GOOD QUESTIONS</div><h2>Let's clear<br/><em>things up.</em></h2><p className="faq-intro">A few helpful answers to get you started on your SAT preparation journey.</p></div><div className="faq-list">{faqs.map(([q,a],i)=><div className={faqOpen===i?'faq-item active':'faq-item'} key={q}><button onClick={() => setFaqOpen(faqOpen===i?null:i)}><span>{q}</span><ChevronDown size={19}/></button>{faqOpen===i&&<p>{a}</p>}</div>)}</div></section>
-
-        <section className="final-cta"><div className="cta-sparkle"><Sparkles size={21}/></div><div className="section-kicker light-kicker">YOUR JOURNEY STARTS WITH ONE STEP</div><h2>Ready to feel more<br/><em>confident?</em></h2><p>Build your skills, find your rhythm, and make your SAT preparation count.</p><button className="white-btn" onClick={() => setShowDemo(true)}>Start your journey <ArrowRight size={17}/></button><span className="cta-caption">A clearer path to your SAT goals.</span></section>
-      </main>
-
-      <footer className="footer"><a className="brand footer-brand" href="#"><span className="brand-mark">S<span>.</span></span><span className="brand-copy"><strong>MRS. SHAIMAA SULAIMAN</strong><small>SAT ENGLISH ACADEMY</small></span></a><p>Thoughtful preparation. Meaningful progress.</p><div className="footer-bottom"><span>© {new Date().getFullYear()} Mrs. Shaimaa Sulaiman. All rights reserved.</span><div><a href="#approach">Our approach</a><a href="#faq">FAQs</a><button onClick={() => setShowDemo(true)}>Student sign in</button></div></div></footer>
-
-      {showDemo && <div className="login-screen">
-        <div className="login-topbar">
-          <a className="brand" href="#" onClick={(e) => { e.preventDefault(); setShowDemo(false); }} aria-label="Back to academy home">
-            <span className="brand-mark">S<span>.</span></span>
-            <span className="brand-copy"><strong>MRS. SHAIMAA SULAIMAN</strong><small>SAT ENGLISH ACADEMY</small></span>
-          </a>
-          <button className="login-back" onClick={() => { setShowDemo(false); setLoginMessage(''); }}><ArrowLeft size={16}/> Back to website</button>
-        </div>
-        <div className="login-layout">
-          <section className="login-intro">
-            <div className="login-orb login-orb-one"/><div className="login-orb login-orb-two"/>
-            <div className="login-intro-content">
-              <div className="login-kicker"><span/> YOUR LEARNING SPACE</div>
-              <h1>Welcome back<br/>to your <em>next step.</em></h1>
-              <p>A focused space for learning, teaching, and helping every student make meaningful progress.</p>
-              <div className="login-points"><span><ShieldCheck size={17}/> Role-based access</span><span><BookOpen size={17}/> SAT-focused learning</span><span><Sparkles size={17}/> Progress that matters</span></div>
-              <div className="login-quote">“Small steps, taken consistently, lead to remarkable progress.”</div>
-            </div>
-          </section>
-          <section className="login-panel-wrap">
-            <form className="login-panel" onSubmit={(e) => { e.preventDefault(); setLoginMessage('Sign-in is not connected yet. Your account will be verified here once authentication is configured.'); }}>
-              <div className="login-panel-heading"><div className="login-panel-icon"><LockKeyhole size={21}/></div><div className="section-kicker">SECURE ACCOUNT ACCESS</div><h2>Sign in to continue</h2><p>Choose your account type, then enter your credentials.</p></div>
-              <div className="role-label">I AM SIGNING IN AS</div>
-              <div className="role-grid">
-                {[
-                  {name:'Student',icon:GraduationCap,desc:'Learn & practice'},
-                  {name:'Parent',icon:Users,desc:'Track progress'},
-                  {name:'Assistant',icon:ClipboardList,desc:'Academic support'},
-                  {name:'Teacher',icon:UserRound,desc:'Teach & manage'},
-                  {name:'Admin',icon:ShieldCheck,desc:'Platform operations'},
-                  {name:'Developer',icon:Code2,desc:'Technical control'}
-                ].map(({name,icon:RoleIcon,desc}) => <button type="button" key={name} className={selectedRole===name?'role-option selected':'role-option'} onClick={() => { setSelectedRole(name); setLoginMessage(''); }} aria-pressed={selectedRole===name}><RoleIcon size={18}/><span><strong>{name}</strong><small>{desc}</small></span>{selectedRole===name&&<Check className="role-check" size={15}/>}</button>)}
-              </div>
-              <label className="login-field-label" htmlFor="login-email">Email address</label>
-              <div className="login-input-wrap"><Mail size={17}/><input id="login-email" type="email" placeholder="you@example.com" autoComplete="username" required/></div>
-              <div className="login-password-heading"><label className="login-field-label" htmlFor="login-password">Password</label><button type="button" className="forgot-password" onClick={() => setLoginMessage('Password recovery will be available after account authentication is connected.')}>Forgot password?</button></div>
-              <div className="login-input-wrap"><KeyRound size={17}/><input id="login-password" type={showPassword?'text':'password'} placeholder="Enter your password" autoComplete="current-password" required/><button type="button" className="password-toggle" aria-label={showPassword?'Hide password':'Show password'} onClick={() => setShowPassword(!showPassword)}>{showPassword?<EyeOff size={17}/>:<Eye size={17}/>}</button></div>
-              {loginMessage&&<div className="login-message" role="status">{loginMessage}</div>}
-              <button className="login-submit" type="submit">Sign in as {selectedRole}<ArrowRight size={17}/></button>
-              <div className="login-security"><ShieldCheck size={15}/> Your account access is protected by role permissions.</div>
-              <div className="login-help">Need help accessing your account? <a href="mailto:">Contact the academy</a></div>
-            </form>
-          </section>
-        </div>
-        <div className="login-footer"><span>© {new Date().getFullYear()} Mrs. Shaimaa Sulaiman SAT English Academy</span><span>Thoughtful preparation. Meaningful progress.</span></div>
-      </div>}
-    </div>
-  );
+ return <div className="app-shell">
+  <aside className={sidebar?'sidebar':'sidebar collapsed'}><div className="side-brand"><span className="brand-mark">S<span>.</span></span>{sidebar&&<div><b>SHAIMAA</b><small>ACADEMY PORTAL</small></div>}<button className="collapse" onClick={()=>setSidebar(!sidebar)}><Menu size={18}/></button></div>
+   <div className="workspace-label">{sidebar?'WORKSPACE':''}</div><div className="side-nav">{navByRole[role].map((item,i)=>{const Icon=[LayoutDashboard,BookOpen,FileQuestion,ClipboardCheck,TrendingUp,CalendarDays,Users,Activity,Settings][i%9];return <button key={item} className={active===item?'side-link active':'side-link'} onClick={()=>setActive(item)} title={item}><Icon size={18}/>{sidebar&&<span>{item}</span>}</button>})}</div>
+   <div className="side-bottom"><button className="side-link" onClick={()=>flash('Help centre is not connected yet.')}><LifeBuoy size={18}/>{sidebar&&<span>Help centre</span>}</button><button className="side-link" onClick={logout}><LogOut size={18}/>{sidebar&&<span>Sign out</span>}</button><div className="profile-mini"><div className="avatar">SS</div>{sidebar&&<div><b>Shaimaa Academy</b><small>{role} demo view</small></div>}</div></div>
+  </aside>
+  <main className="dashboard-main"><header className="dashboard-top"><div className="crumb"><span>Academy</span><ChevronRight size={14}/><b>{active}</b></div><div className="top-actions"><span className="demo-pill"><i/> DEMO WORKSPACE</span><button className="icon-btn" onClick={()=>flash('You are all caught up.')}><Bell size={18}/></button><div className="top-avatar">SS</div></div></header>
+   <div className="dashboard-content"><div className="demo-warning"><ShieldCheck size={17}/><span><b>Preview mode:</b> This is an interactive front-end demonstration. Accounts, records, permissions, and saved data are not connected to a live backend.</span></div>
+    <div className="page-heading"><div><div className="eyebrow">MONDAY, 23 NOVEMBER 2026</div><h1>{active==='Overview'?'Good afternoon, Shaimaa.':active}</h1><p>{role==='Student'?'Your next step starts here. Keep building your skills, one session at a time.':role==='Parent'?'A clear view of your child’s learning journey.':role==='Developer'?'Monitor the platform and its technical operations.':'Manage learning, students, and academy activity from one place.'}</p></div><div className="heading-actions"><select value={role} onChange={e=>{setRole(e.target.value as Role);setActive('Overview')}} aria-label="Preview role">{roles.map(r=><option key={r}>{r}</option>)}</select><button className="button button-primary" onClick={()=>role==='Teacher'||role==='Assistant'||role==='Admin'?setModal(true):flash('This action will be enabled when the backend is connected.')}><Plus size={16}/> {role==='Student'?'Start practice':'Quick action'}</button></div></div>
+    {active==='Overview'&&<><div className="stat-grid"><div className="stat-card"><div><span>ACTIVE STUDENTS</span><Users/></div><strong>{students.length}</strong><small className="positive"><ArrowUpRight size={13}/> Demo records</small></div><div className="stat-card"><div><span>AVERAGE PRACTICE SCORE</span><Target/></div><strong>78%</strong><small className="positive"><TrendingUp size={13}/> Sample metric</small></div><div className="stat-card"><div><span>COMPLETED ACTIVITIES</span><ClipboardCheck/></div><strong>124</strong><small>Illustrative dashboard data</small></div><div className="stat-card"><div><span>UPCOMING EXAMS</span><CalendarDays/></div><strong>03</strong><small>Sample schedule</small></div></div>
+     <div className="dashboard-grid"><section className="panel performance"><div className="panel-head"><div><h3>Learning overview</h3><p>Illustrative weekly activity</p></div><button onClick={()=>setActive('My progress')}>View report <ArrowUpRight size={15}/></button></div><div className="chart-legend"><span><i/> Practice sessions</span><span><i/> Completed lessons</span></div><div className="bar-chart">{[42,67,53,83,61,92,73].map((v,i)=><div className="bar-column" key={i}><div className="bar-pair"><i style={{height:v+'%'}}/><i style={{height:(v*.64)+'%'}}/></div><small>{['Mon','Tue','Wed','Thu','Fri','Sat','Sun'][i]}</small></div>)}</div></section>
+      <section className="panel next-panel"><div className="panel-head"><div><h3>What's next</h3><p>Suggested next steps</p></div><Sparkles/></div><div className="next-item"><span className="next-icon"><BookOpen/></span><div><b>Transitions in context</b><small>Expression of Ideas · 12 min</small></div><ArrowRight/></div><div className="next-item"><span className="next-icon lavender"><FileQuestion/></span><div><b>Practice: punctuation</b><small>Standard English · 10 questions</small></div><ArrowRight/></div><div className="next-item"><span className="next-icon green"><Target/></span><div><b>Review your weak skills</b><small>Personal study recommendation</small></div><ArrowRight/></div></section></div>
+     <div className="bottom-grid"><section className="panel"><div className="panel-head"><div><h3>Recent activity</h3><p>Latest updates in this demo</p></div><button onClick={()=>setActive('Activity log')}>View all</button></div><div className="activity-row"><span className="activity-dot blue-dot"/><div><b>Practice session completed</b><small>Information & Ideas · 8 minutes ago</small></div><strong>+12 XP</strong></div><div className="activity-row"><span className="activity-dot green-dot"/><div><b>Lesson marked complete</b><small>Transitions in context · Yesterday</small></div><strong>Done</strong></div><div className="activity-row"><span className="activity-dot violet-dot"/><div><b>New assignment available</b><small>Grammar review · 2 days ago</small></div><strong>New</strong></div></section><section className="panel goal-panel-dash"><div className="panel-head"><div><h3>Weekly goal</h3><p>Keep your learning streak going</p></div><Zap/></div><div className="goal-number">4 <small>/ 5 sessions</small></div><div className="progress large"><i style={{width:'80%'}}/></div><p>You are one session away from your weekly goal.</p></section></div>
+    </>}
+    {(active==='Students'||active==='My classes'||active==='My children'||active==='Users & roles')&&<section className="panel table-panel"><div className="panel-head"><div><h3>{active}</h3><p>Sample student directory · local preview only</p></div><button className="button button-primary" onClick={()=>setModal(true)}><Plus size={15}/> Add student</button></div><div className="table-tools"><div className="searchbox"><Search size={16}/><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search students..."/></div><button className="filter-btn">All groups <ChevronDown size={14}/></button><button className="filter-btn" onClick={()=>flash('CSV export will be available with connected records.')}><Download size={15}/> Export</button></div><div className="table-scroll"><table><thead><tr><th>STUDENT</th><th>GROUP</th><th>PRACTICE SCORE</th><th>STATUS</th><th/></tr></thead><tbody>{filtered.map(s=><tr key={s.id}><td><div className="student-cell"><span className="student-avatar">{s.name.split(' ').map(n=>n[0]).join('').slice(0,2)}</span><div><b>{s.name}</b><small>{s.email}</small></div></div></td><td>{s.group}</td><td><b>{s.score||'—'}</b></td><td><span className={s.status==='Active'?'status active-status':'status'}>{s.status}</span></td><td><button className="row-action" onClick={()=>flash('Student details are sample data in preview mode.')}><ArrowUpRight size={16}/></button></td></tr>)}</tbody></table>{filtered.length===0&&<div className="empty-state">No students match your search.</div>}</div></section>}
+    {active==='Practice'&&<section className="panel practice-panel"><div className="practice-meta"><span>QUESTION {qIndex+1} OF {questions.length}</span><span>{questions[qIndex].domain}</span></div><div className="practice-progress"><i style={{width:((qIndex+1)/questions.length*100)+'%'}}/></div><h2>{questions[qIndex].question}</h2><div className="passage">{questions[qIndex].passage}</div><div className="answer-list">{questions[qIndex].answers.map((a,i)=><button key={a} className={answer===i?'answer-choice chosen':''} onClick={()=>{setAnswer(i);setShowExplanation(false)}}><span>{String.fromCharCode(65+i)}</span>{a}{answer===i&&<Check size={17}/>}</button>)}</div>{showExplanation&&<div className={answer===questions[qIndex].correct?'answer-feedback correct':'answer-feedback incorrect'}><b>{answer===questions[qIndex].correct?'Correct answer!':'Not quite. The correct answer is '+String.fromCharCode(65+questions[qIndex].correct)+'.'}</b><p>{questions[qIndex].explain}</p></div>}<div className="practice-actions"><button className="filter-btn" onClick={()=>{setQIndex((qIndex+questions.length-1)%questions.length);setAnswer(null);setShowExplanation(false)}}><ChevronLeft size={16}/> Previous</button><button className="button button-primary" disabled={answer===null} onClick={()=>showExplanation?(setQIndex((qIndex+1)%questions.length),setAnswer(null),setShowExplanation(false)):setShowExplanation(true)}>{showExplanation?'Next question':'Check answer'} <ArrowRight size={16}/></button></div></section>}
+    {active!=='Overview'&&!['Students','My classes','My children','Users & roles','Practice'].includes(active)&&<section className="module-grid"><div className="panel module-card"><div className="module-icon"><BookOpen/></div><h3>{active} workspace</h3><p>This area is designed for the {role.toLowerCase()} role. Connect the academy database and authentication to load real records and enable secure actions.</p><button className="button button-primary" onClick={()=>flash('This module is part of the platform preview. Live data connection is still required.')}>Explore module <ArrowRight size={16}/></button></div><div className="panel module-card"><div className="module-icon lavender"><Brain/></div><h3>Learning intelligence</h3><p>Organize learning activity, identify skill gaps, and turn progress into practical next steps.</p><button className="filter-btn" onClick={()=>setActive('Overview')}>Back to overview</button></div></section>}
+   </div>
+  </main>
+  {modal&&<div className="modal-layer" onClick={()=>setModal(false)}><form className="modal-card" onClick={e=>e.stopPropagation()} onSubmit={addStudent}><button type="button" className="modal-x" onClick={()=>setModal(false)}><X/></button><div className="module-icon"><Users/></div><h2>Add a student</h2><p>Add a sample student to this local preview.</p><label>Full name<input required value={newName} onChange={e=>setNewName(e.target.value)} placeholder="Student name"/></label><label>Email address<input required type="email" value={newEmail} onChange={e=>setNewEmail(e.target.value)} placeholder="student@example.com"/></label><label>Class<select value={newGroup} onChange={e=>setNewGroup(e.target.value)}><option>G12-A</option><option>G12-B</option><option>G12-C</option></select></label><button className="button button-primary" type="submit">Add to preview <Plus size={16}/></button></form></div>}
+  {notice&&<div className="toast"><Check size={16}/>{notice}</div>}
+ </div>;
 }
